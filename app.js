@@ -1,28 +1,14 @@
 // ==========================================
 // FIREBASE CONFIGURATION
-// Replace with your Firebase config
 // ==========================================
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
     apiKey: "AIzaSyBHC6WOG9Z2qI6XoeAxuqVAHwqhxPAGcE0",
     authDomain: "couple-app-18d2d.firebaseapp.com",
     projectId: "couple-app-18d2d",
     storageBucket: "couple-app-18d2d.firebasestorage.app",
     messagingSenderId: "759079152321",
-    appId: "1:759079152321:web:a8c9a0b558529f2f414240",
-    measurementId: "G-9ZZE93EHKE"
+    appId: "1:759079152321:web:a8c9a0b558529f2f414240"
 };
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
 
 // ==========================================
 // APP STATE
@@ -60,6 +46,10 @@ function initFirebase() {
         db.enablePersistence().catch((err) => {
             console.log("Persistence error:", err);
         });
+
+        // Load local data first, then sync with Firebase
+        loadFromLocalStorage();
+        renderAll();
 
         // Listen for real-time updates
         setupRealtimeListeners();
