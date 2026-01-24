@@ -7,7 +7,8 @@ const firebaseConfig = {
     projectId: "couple-app-18d2d",
     storageBucket: "couple-app-18d2d.firebasestorage.app",
     messagingSenderId: "759079152321",
-    appId: "1:759079152321:web:a8c9a0b558529f2f414240"
+    appId: "1:759079152321:web:a8c9a0b558529f2f414240",
+    measurementId: "G-9ZZE93EHKE"
 };
 
 // ==========================================
