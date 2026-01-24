@@ -266,7 +266,6 @@ function openRecipeModal(recipeData = null) {
 
 function openPlanModal() {
     document.getElementById('planForm').reset();
-    document.getElementById('planDate').valueAsDate = new Date();
     updateDateSelectorList();
     openModal('planModal');
 }
@@ -584,9 +583,9 @@ function renderRecipes() {
 function renderPlans() {
     const container = document.getElementById('plansContainer');
 
-    // Filter out past plans (optional - keep for history)
+    // Filter out past plans, but keep plans without dates
     const today = new Date().toISOString().split('T')[0];
-    const upcomingPlans = plans.filter(p => p.date >= today);
+    const upcomingPlans = plans.filter(p => !p.date || p.date >= today);
 
     if (upcomingPlans.length === 0) {
         container.innerHTML = `
@@ -609,7 +608,7 @@ function renderPlans() {
             .filter(r => r)
             .map(r => r.name);
 
-        const formattedDate = formatDate(plan.date);
+        const formattedDate = plan.date ? formatDate(plan.date) : 'TBD';
         const timeStr = plan.time ? ` at ${formatTime(plan.time)}` : '';
 
         return `
