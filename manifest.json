@@ -1,0 +1,24 @@
+{
+    "name": "Us - Date Ideas & Recipes",
+    "short_name": "Us",
+    "description": "A couple's app for date ideas and recipes",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#fef7f9",
+    "theme_color": "#ff6b9d",
+    "orientation": "portrait",
+    "icons": [
+        {
+            "src": "icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}
