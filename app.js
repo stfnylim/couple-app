@@ -266,7 +266,33 @@ function openRecipeModal(recipeData = null) {
 
 function openPlanModal() {
     document.getElementById('planForm').reset();
+    document.getElementById('planId').value = '';
     updateDateSelectorList();
+    openModal('planModal');
+}
+
+function openPlanModalForEdit(planData) {
+    document.getElementById('planForm').reset();
+    document.getElementById('planId').value = planData.id;
+    document.getElementById('planDate').value = planData.date || '';
+    document.getElementById('planTime').value = planData.time || '';
+    document.getElementById('planTitle').value = planData.title || '';
+    document.getElementById('planNotes').value = planData.notes || '';
+
+    updateDateSelectorList();
+
+    // Check the selected date ideas
+    (planData.dateIds || []).forEach(id => {
+        const checkbox = document.querySelector(`#dateSelectorList input[value="${id}"]`);
+        if (checkbox) checkbox.checked = true;
+    });
+
+    // Check the selected recipes
+    (planData.recipeIds || []).forEach(id => {
+        const checkbox = document.querySelector(`#recipeSelectorList input[value="${id}"]`);
+        if (checkbox) checkbox.checked = true;
+    });
+
     openModal('planModal');
 }
 
@@ -405,6 +431,7 @@ async function handleRecipeSubmit(e) {
 async function handlePlanSubmit(e) {
     e.preventDefault();
 
+    const id = document.getElementById('planId').value;
     const selectedDateIds = Array.from(document.querySelectorAll('#dateSelectorList input:checked')).map(cb => cb.value);
     const selectedRecipeIds = Array.from(document.querySelectorAll('#recipeSelectorList input:checked')).map(cb => cb.value);
     const title = document.getElementById('planTitle').value.trim();
@@ -416,18 +443,30 @@ async function handlePlanSubmit(e) {
         dateIds: selectedDateIds,
         recipeIds: selectedRecipeIds,
         notes: document.getElementById('planNotes').value.trim(),
-        createdAt: new Date().toISOString()
+        updatedAt: new Date().toISOString()
     };
 
     try {
         updateSyncStatus('syncing');
 
         if (db) {
-            await db.collection('plans').add(planData);
+            if (id) {
+                await db.collection('plans').doc(id).update(planData);
+            } else {
+                planData.createdAt = new Date().toISOString();
+                await db.collection('plans').add(planData);
+            }
         } else {
-            planData.id = 'local_' + Date.now();
-            plans.push(planData);
-            plans.sort((a, b) => a.date.localeCompare(b.date));
+            // Local storage fallback
+            if (id) {
+                const index = plans.findIndex(p => p.id === id);
+                if (index !== -1) plans[index] = { ...plans[index], ...planData };
+            } else {
+                planData.id = 'local_' + Date.now();
+                planData.createdAt = new Date().toISOString();
+                plans.push(planData);
+            }
+            plans.sort((a, b) => (a.date || 'z').localeCompare(b.date || 'z'));
             saveToLocalStorage();
             renderPlans();
         }
@@ -614,6 +653,7 @@ function renderPlans() {
         return `
             <div class="plan-card">
                 <div class="plan-actions">
+                    <button class="plan-action-btn" onclick="openPlanModalForEdit(${JSON.stringify(plan).replace(/"/g, '&quot;')})">✏️</button>
                     <button class="plan-action-btn" onclick="confirmDelete('plans', '${plan.id}', 'this plan')">🗑️</button>
                 </div>
                 ${plan.title ? `<div class="plan-title">${escapeHtml(plan.title)}</div>` : ''}
@@ -681,4 +721,5 @@ function initServiceWorker() {
 // Make functions globally available
 window.openDateModal = openDateModal;
 window.openRecipeModal = openRecipeModal;
+window.openPlanModalForEdit = openPlanModalForEdit;
 window.confirmDelete = confirmDelete;
