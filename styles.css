@@ -177,6 +177,139 @@ body {
     font-style: italic;
 }
 
+/* Expandable plan cards */
+.plan-card {
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.plan-expand-hint {
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--text-light);
+    margin-top: 10px;
+    opacity: 0.7;
+}
+
+.plan-card.expanded .plan-expand-hint {
+    display: none;
+}
+
+.plan-details {
+    display: none;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px dashed var(--border);
+}
+
+.plan-card.expanded .plan-details {
+    display: block;
+}
+
+.plan-card.expanded {
+    background: linear-gradient(135deg, #fff0f5 0%, #fff 100%);
+}
+
+.plan-detail-section {
+    margin-bottom: 16px;
+}
+
+.plan-detail-section:last-child {
+    margin-bottom: 0;
+}
+
+.plan-detail-section h4 {
+    font-size: 0.9rem;
+    color: var(--primary);
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.plan-detail-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    margin-bottom: 10px;
+}
+
+.plan-detail-card:last-child {
+    margin-bottom: 0;
+}
+
+.plan-detail-card strong {
+    display: block;
+    font-size: 0.95rem;
+    margin-bottom: 6px;
+    color: var(--text);
+}
+
+.plan-detail-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--primary);
+    font-size: 0.85rem;
+    text-decoration: none;
+    font-weight: 500;
+    padding: 6px 0;
+}
+
+.plan-detail-link:hover {
+    text-decoration: underline;
+}
+
+.plan-detail-notes {
+    font-size: 0.85rem;
+    color: var(--text-light);
+    margin: 6px 0;
+}
+
+.plan-detail-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.plan-detail-tags .tag {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+}
+
+.recipe-detail {
+    background: #fffdf5;
+}
+
+.recipe-meta-small {
+    display: flex;
+    gap: 12px;
+    font-size: 0.8rem;
+    color: var(--text-light);
+    margin-bottom: 8px;
+}
+
+.plan-recipe-ingredients {
+    margin: 8px 0;
+}
+
+.ingredients-label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-light);
+    margin-bottom: 6px;
+}
+
+.ingredient-chip {
+    display: inline-block;
+    background: #f5f5f5;
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    color: var(--text-light);
+    margin: 2px;
+}
+
 .plan-actions {
     position: absolute;
     top: 12px;

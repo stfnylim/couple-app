@@ -637,21 +637,20 @@ function renderPlans() {
     }
 
     container.innerHTML = upcomingPlans.map(plan => {
-        const dateNames = (plan.dateIds || [])
+        // Get full date and recipe objects
+        const planDates = (plan.dateIds || [])
             .map(id => dates.find(d => d.id === id))
-            .filter(d => d)
-            .map(d => d.name);
+            .filter(d => d);
 
-        const recipeNames = (plan.recipeIds || [])
+        const planRecipes = (plan.recipeIds || [])
             .map(id => recipes.find(r => r.id === id))
-            .filter(r => r)
-            .map(r => r.name);
+            .filter(r => r);
 
         const formattedDate = plan.date ? formatDate(plan.date) : 'TBD';
         const timeStr = plan.time ? ` at ${formatTime(plan.time)}` : '';
 
         return `
-            <div class="plan-card">
+            <div class="plan-card" onclick="togglePlanExpand(this, event)">
                 <div class="plan-actions">
                     <button class="plan-action-btn" onclick="openPlanModalForEdit(${JSON.stringify(plan).replace(/"/g, '&quot;')})">✏️</button>
                     <button class="plan-action-btn" onclick="confirmDelete('plans', '${plan.id}', 'this plan')">🗑️</button>
@@ -660,20 +659,80 @@ function renderPlans() {
                 <div class="plan-date">
                     📅 ${formattedDate}${timeStr}
                 </div>
-                ${dateNames.length > 0 ? `
-                    <div class="plan-items">
-                        ${dateNames.map(name => `<span class="plan-item">📍 ${escapeHtml(name)}</span>`).join('')}
+                ${planDates.length > 0 ? `
+                    <div class="plan-items plan-summary">
+                        ${planDates.map(d => `<span class="plan-item">📍 ${escapeHtml(d.name)}</span>`).join('')}
                     </div>
                 ` : ''}
-                ${recipeNames.length > 0 ? `
-                    <div class="plan-items">
-                        ${recipeNames.map(name => `<span class="plan-item recipe-item">🍳 ${escapeHtml(name)}</span>`).join('')}
+                ${planRecipes.length > 0 ? `
+                    <div class="plan-items plan-summary">
+                        ${planRecipes.map(r => `<span class="plan-item recipe-item">🍳 ${escapeHtml(r.name)}</span>`).join('')}
                     </div>
                 ` : ''}
                 ${plan.notes ? `<p class="plan-notes">${escapeHtml(plan.notes)}</p>` : ''}
+                <div class="plan-expand-hint">Tap to see details ▼</div>
+
+                <!-- Expanded Details -->
+                <div class="plan-details">
+                    ${planDates.length > 0 ? `
+                        <div class="plan-detail-section">
+                            <h4>Date Ideas</h4>
+                            ${planDates.map(d => `
+                                <div class="plan-detail-card">
+                                    <strong>${escapeHtml(d.name)}</strong>
+                                    ${d.location ? `
+                                        <a href="${getMapsLink(d.address || d.location)}" target="_blank" class="plan-detail-link" onclick="event.stopPropagation()">
+                                            📍 ${escapeHtml(d.location)}
+                                        </a>
+                                    ` : ''}
+                                    ${d.notes ? `<p class="plan-detail-notes">${escapeHtml(d.notes)}</p>` : ''}
+                                    ${d.tags && d.tags.length > 0 ? `
+                                        <div class="plan-detail-tags">
+                                            ${d.tags.map(tag => `<span class="tag ${tag}">${tag}</span>`).join('')}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                    ${planRecipes.length > 0 ? `
+                        <div class="plan-detail-section">
+                            <h4>Recipes</h4>
+                            ${planRecipes.map(r => `
+                                <div class="plan-detail-card recipe-detail">
+                                    <strong>${escapeHtml(r.name)}</strong>
+                                    <div class="recipe-meta-small">
+                                        ${r.time ? `<span>⏱️ ${escapeHtml(r.time)}</span>` : ''}
+                                        ${r.servings ? `<span>👥 ${escapeHtml(r.servings)}</span>` : ''}
+                                    </div>
+                                    ${r.ingredients && r.ingredients.length > 0 ? `
+                                        <div class="plan-recipe-ingredients">
+                                            <span class="ingredients-label">Ingredients:</span>
+                                            ${r.ingredients.slice(0, 5).map(ing => `<span class="ingredient-chip">${escapeHtml(ing)}</span>`).join('')}
+                                            ${r.ingredients.length > 5 ? `<span class="ingredient-chip">+${r.ingredients.length - 5} more</span>` : ''}
+                                        </div>
+                                    ` : ''}
+                                    ${r.link ? `
+                                        <a href="${r.link}" target="_blank" class="plan-detail-link" onclick="event.stopPropagation()">
+                                            🔗 View full recipe
+                                        </a>
+                                    ` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                </div>
             </div>
         `;
     }).join('');
+}
+
+function togglePlanExpand(card, event) {
+    // Don't toggle if clicking on buttons or links
+    if (event.target.closest('.plan-actions') || event.target.closest('a')) {
+        return;
+    }
+    card.classList.toggle('expanded');
 }
 
 // ==========================================
@@ -722,4 +781,5 @@ function initServiceWorker() {
 window.openDateModal = openDateModal;
 window.openRecipeModal = openRecipeModal;
 window.openPlanModalForEdit = openPlanModalForEdit;
+window.togglePlanExpand = togglePlanExpand;
 window.confirmDelete = confirmDelete;
