@@ -275,16 +275,33 @@ function updateDateSelectorList() {
     const container = document.getElementById('dateSelectorList');
 
     if (dates.length === 0) {
-        container.innerHTML = '<p style="padding: 10px; color: #888;">No date ideas yet. Add some first!</p>';
-        return;
+        container.innerHTML = '<p style="padding: 10px; color: #888;">No date ideas yet.</p>';
+    } else {
+        container.innerHTML = dates.map(date => `
+            <label class="date-select-option">
+                <input type="checkbox" value="${date.id}">
+                <span>${date.name}</span>
+            </label>
+        `).join('');
     }
 
-    container.innerHTML = dates.map(date => `
-        <label class="date-select-option">
-            <input type="checkbox" value="${date.id}">
-            <span>${date.name}</span>
-        </label>
-    `).join('');
+    // Also update recipe selector
+    updateRecipeSelectorList();
+}
+
+function updateRecipeSelectorList() {
+    const container = document.getElementById('recipeSelectorList');
+
+    if (recipes.length === 0) {
+        container.innerHTML = '<p style="padding: 10px; color: #888;">No recipes yet.</p>';
+    } else {
+        container.innerHTML = recipes.map(recipe => `
+            <label class="date-select-option">
+                <input type="checkbox" value="${recipe.id}">
+                <span>${recipe.name}</span>
+            </label>
+        `).join('');
+    }
 }
 
 // ==========================================
@@ -330,10 +347,11 @@ async function handleDateSubmit(e) {
             updateDateSelectorList();
         }
 
-        closeModal('dateModal');
     } catch (error) {
         console.error("Error saving date:", error);
         alert("Failed to save. Please try again.");
+    } finally {
+        closeModal('dateModal');
     }
 }
 
@@ -377,10 +395,11 @@ async function handleRecipeSubmit(e) {
             renderRecipes();
         }
 
-        closeModal('recipeModal');
     } catch (error) {
         console.error("Error saving recipe:", error);
         alert("Failed to save. Please try again.");
+    } finally {
+        closeModal('recipeModal');
     }
 }
 
@@ -388,16 +407,15 @@ async function handlePlanSubmit(e) {
     e.preventDefault();
 
     const selectedDateIds = Array.from(document.querySelectorAll('#dateSelectorList input:checked')).map(cb => cb.value);
-
-    if (selectedDateIds.length === 0) {
-        alert("Please select at least one date idea!");
-        return;
-    }
+    const selectedRecipeIds = Array.from(document.querySelectorAll('#recipeSelectorList input:checked')).map(cb => cb.value);
+    const title = document.getElementById('planTitle').value.trim();
 
     const planData = {
         date: document.getElementById('planDate').value,
         time: document.getElementById('planTime').value,
+        title: title,
         dateIds: selectedDateIds,
+        recipeIds: selectedRecipeIds,
         notes: document.getElementById('planNotes').value.trim(),
         createdAt: new Date().toISOString()
     };
@@ -415,10 +433,11 @@ async function handlePlanSubmit(e) {
             renderPlans();
         }
 
-        closeModal('planModal');
     } catch (error) {
         console.error("Error saving plan:", error);
         alert("Failed to save. Please try again.");
+    } finally {
+        closeModal('planModal');
     }
 }
 
@@ -457,13 +476,13 @@ async function handleConfirmDelete() {
             saveToLocalStorage();
         }
 
-        closeModal('confirmModal');
     } catch (error) {
         console.error("Error deleting:", error);
         alert("Failed to delete. Please try again.");
+    } finally {
+        closeModal('confirmModal');
+        pendingDelete = null;
     }
-
-    pendingDelete = null;
 }
 
 // ==========================================
@@ -580,10 +599,15 @@ function renderPlans() {
     }
 
     container.innerHTML = upcomingPlans.map(plan => {
-        const dateNames = plan.dateIds
+        const dateNames = (plan.dateIds || [])
             .map(id => dates.find(d => d.id === id))
             .filter(d => d)
             .map(d => d.name);
+
+        const recipeNames = (plan.recipeIds || [])
+            .map(id => recipes.find(r => r.id === id))
+            .filter(r => r)
+            .map(r => r.name);
 
         const formattedDate = formatDate(plan.date);
         const timeStr = plan.time ? ` at ${formatTime(plan.time)}` : '';
@@ -593,12 +617,20 @@ function renderPlans() {
                 <div class="plan-actions">
                     <button class="plan-action-btn" onclick="confirmDelete('plans', '${plan.id}', 'this plan')">🗑️</button>
                 </div>
+                ${plan.title ? `<div class="plan-title">${escapeHtml(plan.title)}</div>` : ''}
                 <div class="plan-date">
                     📅 ${formattedDate}${timeStr}
                 </div>
-                <div class="plan-items">
-                    ${dateNames.map(name => `<span class="plan-item">${escapeHtml(name)}</span>`).join('')}
-                </div>
+                ${dateNames.length > 0 ? `
+                    <div class="plan-items">
+                        ${dateNames.map(name => `<span class="plan-item">📍 ${escapeHtml(name)}</span>`).join('')}
+                    </div>
+                ` : ''}
+                ${recipeNames.length > 0 ? `
+                    <div class="plan-items">
+                        ${recipeNames.map(name => `<span class="plan-item recipe-item">🍳 ${escapeHtml(name)}</span>`).join('')}
+                    </div>
+                ` : ''}
                 ${plan.notes ? `<p class="plan-notes">${escapeHtml(plan.notes)}</p>` : ''}
             </div>
         `;
