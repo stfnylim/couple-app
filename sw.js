@@ -1,4 +1,4 @@
-const CACHE_NAME = 'us-app-v1';
+const CACHE_NAME = 'us-app-v2';
 const urlsToCache = [
     '/',
     '/index.html',
@@ -50,7 +50,8 @@ self.addEventListener('fetch', (event) => {
     // Skip Firebase requests (let them handle their own caching)
     if (event.request.url.includes('firestore') ||
         event.request.url.includes('firebase') ||
-        event.request.url.includes('googleapis.com/identitytoolkit')) {
+        event.request.url.includes('googleapis.com/identitytoolkit') ||
+        event.request.url.includes('securetoken.googleapis.com')) {
         return;
     }
 

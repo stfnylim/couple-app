@@ -15,15 +15,26 @@ const firebaseConfig = {
 // APP STATE
 // ==========================================
 let db = null;
+let auth = null;
+let currentUser = null;
+let currentSpaceId = null;
 let isOnline = navigator.onLine;
 let dates = [];
 let recipes = [];
 let plans = [];
+let unsubscribeDates = null;
+let unsubscribeRecipes = null;
+let unsubscribePlans = null;
 
 // ==========================================
 // INITIALIZE APP
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
+    // Optimistically hide login screen if user was previously signed in
+    if (localStorage.getItem('authUser')) {
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('app').style.display = '';
+    }
     initFirebase();
     initEventListeners();
     initServiceWorker();
@@ -32,7 +43,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function initFirebase() {
     try {
-        // Check if Firebase config is set
         if (firebaseConfig.apiKey === "YOUR_API_KEY") {
             console.warn("Firebase not configured. Using local storage only.");
             loadFromLocalStorage();
@@ -42,18 +52,15 @@ function initFirebase() {
 
         firebase.initializeApp(firebaseConfig);
         db = firebase.firestore();
+        auth = firebase.auth();
 
         // Enable offline persistence
         db.enablePersistence().catch((err) => {
             console.log("Persistence error:", err);
         });
 
-        // Load local data first, then sync with Firebase
-        loadFromLocalStorage();
-        renderAll();
-
-        // Listen for real-time updates
-        setupRealtimeListeners();
+        // Listen for auth state changes
+        auth.onAuthStateChanged(handleAuthStateChanged);
 
     } catch (error) {
         console.error("Firebase init error:", error);
@@ -62,55 +69,380 @@ function initFirebase() {
     }
 }
 
+// ==========================================
+// AUTHENTICATION
+// ==========================================
+async function handleAuthStateChanged(user) {
+    if (user) {
+        currentUser = user;
+        localStorage.setItem('authUser', '1');
+        showApp();
+        updateUserUI(user);
+
+        try {
+            const userDoc = await db.collection('users').doc(user.uid).get();
+
+            if (userDoc.exists && userDoc.data().spaceId) {
+                currentSpaceId = userDoc.data().spaceId;
+                setupRealtimeListeners();
+                updateSpaceUI();
+            } else {
+                showSpaceSetup();
+            }
+        } catch (error) {
+            console.error("Error loading user data:", error);
+            loadFromLocalStorage();
+            renderAll();
+        }
+    } else {
+        currentUser = null;
+        currentSpaceId = null;
+        localStorage.removeItem('authUser');
+        teardownRealtimeListeners();
+        showLoginScreen();
+    }
+}
+
+function showApp() {
+    document.getElementById('loginScreen').classList.add('hidden');
+    document.getElementById('app').style.display = '';
+}
+
+function showLoginScreen() {
+    document.getElementById('loginScreen').classList.remove('hidden');
+    document.getElementById('app').style.display = 'none';
+}
+
+function updateUserUI(user) {
+    const avatar = document.getElementById('userAvatar');
+    avatar.src = user.photoURL || '';
+    avatar.alt = user.displayName || 'User';
+
+    document.getElementById('settingsAvatar').src = user.photoURL || '';
+    document.getElementById('settingsName').textContent = user.displayName || 'User';
+    document.getElementById('settingsEmail').textContent = user.email || '';
+}
+
+function teardownRealtimeListeners() {
+    if (unsubscribeDates) { unsubscribeDates(); unsubscribeDates = null; }
+    if (unsubscribeRecipes) { unsubscribeRecipes(); unsubscribeRecipes = null; }
+    if (unsubscribePlans) { unsubscribePlans(); unsubscribePlans = null; }
+    dates = [];
+    recipes = [];
+    plans = [];
+    renderAll();
+}
+
+async function signInWithGoogle() {
+    try {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        await auth.signInWithPopup(provider);
+    } catch (error) {
+        console.error("Sign-in error:", error);
+        if (error.code === 'auth/popup-closed-by-user') return;
+        alert("Sign-in failed. Please try again.");
+    }
+}
+
+async function signOut() {
+    try {
+        await auth.signOut();
+        localStorage.removeItem('dates');
+        localStorage.removeItem('recipes');
+        localStorage.removeItem('plans');
+    } catch (error) {
+        console.error("Sign-out error:", error);
+    }
+}
+
+// ==========================================
+// SPACE MANAGEMENT
+// ==========================================
+function getCollectionRef(collectionName) {
+    if (!db || !currentSpaceId) return null;
+    return db.collection('spaces').doc(currentSpaceId).collection(collectionName);
+}
+
+function generateInviteCode() {
+    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+}
+
+async function handleCreateSpace() {
+    if (!currentUser || !db) return;
+
+    const btn = document.getElementById('createSpaceBtn');
+    try {
+        btn.disabled = true;
+        btn.textContent = 'Creating...';
+
+        const inviteCode = generateInviteCode();
+
+        const spaceRef = await db.collection('spaces').add({
+            members: [currentUser.uid],
+            createdBy: currentUser.uid,
+            inviteCode: inviteCode,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        currentSpaceId = spaceRef.id;
+
+        await db.collection('users').doc(currentUser.uid).set({
+            spaceId: currentSpaceId,
+            displayName: currentUser.displayName,
+            email: currentUser.email,
+            photoURL: currentUser.photoURL,
+            joinedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        await migrateRootData();
+        setupRealtimeListeners();
+        updateSpaceUI();
+
+    } catch (error) {
+        console.error("Error creating space:", error);
+        alert("Failed to create space. Please try again.");
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Create Space';
+    }
+}
+
+async function handleJoinSpace() {
+    if (!currentUser || !db) return;
+
+    const code = document.getElementById('joinCodeInput').value.trim().toUpperCase();
+    if (!code || code.length < 6) {
+        alert("Please enter a valid 6-character invite code.");
+        return;
+    }
+
+    const btn = document.getElementById('joinSpaceBtn');
+    try {
+        btn.disabled = true;
+        btn.textContent = 'Joining...';
+
+        const spacesSnapshot = await db.collection('spaces')
+            .where('inviteCode', '==', code)
+            .limit(1)
+            .get();
+
+        if (spacesSnapshot.empty) {
+            alert("Invalid invite code. Please check and try again.");
+            return;
+        }
+
+        const spaceDoc = spacesSnapshot.docs[0];
+        const spaceData = spaceDoc.data();
+
+        if (spaceData.members && spaceData.members.length >= 2) {
+            alert("This space already has two members.");
+            return;
+        }
+
+        if (spaceData.members && spaceData.members.includes(currentUser.uid)) {
+            alert("You are already a member of this space.");
+            return;
+        }
+
+        currentSpaceId = spaceDoc.id;
+
+        await db.collection('spaces').doc(currentSpaceId).update({
+            members: firebase.firestore.FieldValue.arrayUnion(currentUser.uid)
+        });
+
+        await db.collection('users').doc(currentUser.uid).set({
+            spaceId: currentSpaceId,
+            displayName: currentUser.displayName,
+            email: currentUser.email,
+            photoURL: currentUser.photoURL,
+            joinedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        setupRealtimeListeners();
+        updateSpaceUI();
+
+    } catch (error) {
+        console.error("Error joining space:", error);
+        alert("Failed to join space. Please try again.");
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Join';
+    }
+}
+
+async function updateSpaceUI() {
+    const inviteSection = document.getElementById('inviteCodeSection');
+    const joinSection = document.getElementById('joinSpaceSection');
+    const spaceStatus = document.getElementById('spaceStatus');
+
+    if (!currentSpaceId) {
+        showSpaceSetup();
+        return;
+    }
+
+    joinSection.style.display = 'none';
+    inviteSection.style.display = '';
+
+    try {
+        const spaceDoc = await db.collection('spaces').doc(currentSpaceId).get();
+        if (spaceDoc.exists) {
+            const data = spaceDoc.data();
+            document.getElementById('inviteCodeDisplay').textContent = data.inviteCode;
+
+            const memberCount = (data.members || []).length;
+            spaceStatus.textContent = memberCount === 2
+                ? 'Connected with your partner!'
+                : 'Waiting for your partner to join...';
+        }
+    } catch (error) {
+        console.error("Error loading space info:", error);
+        spaceStatus.textContent = 'Space loaded (offline mode)';
+    }
+}
+
+function showSpaceSetup() {
+    document.getElementById('inviteCodeSection').style.display = 'none';
+    document.getElementById('joinSpaceSection').style.display = '';
+    document.getElementById('spaceStatus').textContent = 'Create a space or join your partner\'s.';
+    loadFromLocalStorage();
+    renderAll();
+}
+
+function handleCopyInviteCode() {
+    const code = document.getElementById('inviteCodeDisplay').textContent;
+    navigator.clipboard.writeText(code).then(() => {
+        const btn = document.getElementById('copyInviteBtn');
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+    }).catch(() => {
+        alert('Invite code: ' + code);
+    });
+}
+
+// ==========================================
+// DATA MIGRATION
+// ==========================================
+async function migrateRootData() {
+    if (!db || !currentSpaceId) return;
+
+    try {
+        console.log("Starting data migration to space:", currentSpaceId);
+        updateSyncStatus('syncing');
+
+        const collections = ['dates', 'recipes', 'plans'];
+        let totalMigrated = 0;
+
+        for (const collectionName of collections) {
+            const rootSnapshot = await db.collection(collectionName).get();
+            if (rootSnapshot.empty) continue;
+
+            let batch = db.batch();
+            let batchCount = 0;
+
+            for (const doc of rootSnapshot.docs) {
+                const targetRef = db.collection('spaces').doc(currentSpaceId)
+                    .collection(collectionName).doc(doc.id);
+
+                batch.set(targetRef, {
+                    ...doc.data(),
+                    migratedFrom: 'root',
+                    migratedAt: new Date().toISOString()
+                });
+
+                batchCount++;
+                totalMigrated++;
+
+                if (batchCount >= 450) {
+                    await batch.commit();
+                    batch = db.batch();
+                    batchCount = 0;
+                }
+            }
+
+            if (batchCount > 0) {
+                await batch.commit();
+            }
+
+            console.log(`Migrated ${rootSnapshot.size} ${collectionName}`);
+        }
+
+        await db.collection('spaces').doc(currentSpaceId).update({
+            migrated: true,
+            migratedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            migratedDocCount: totalMigrated
+        });
+
+        console.log(`Migration complete. ${totalMigrated} documents migrated.`);
+        updateSyncStatus('synced');
+
+    } catch (error) {
+        console.error("Migration error:", error);
+        alert("Some data could not be migrated. Your original data is safe. Please check your connection and try refreshing.");
+    }
+}
+
 function setupRealtimeListeners() {
-    // Listen for dates collection
-    db.collection('dates').orderBy('createdAt', 'desc').onSnapshot((snapshot) => {
-        dates = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        saveToLocalStorage();
-        renderDates();
-        updateDateSelectorList();
-        updateSyncStatus('synced');
-    }, (error) => {
-        console.error("Dates listener error:", error);
-        updateSyncStatus('offline');
-    });
+    teardownRealtimeListeners();
+    if (!currentSpaceId) return;
 
-    // Listen for recipes collection
-    db.collection('recipes').orderBy('createdAt', 'desc').onSnapshot((snapshot) => {
-        recipes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        saveToLocalStorage();
-        renderRecipes();
-        updateSyncStatus('synced');
-    }, (error) => {
-        console.error("Recipes listener error:", error);
-        updateSyncStatus('offline');
-    });
+    unsubscribeDates = getCollectionRef('dates')
+        .orderBy('createdAt', 'desc')
+        .onSnapshot((snapshot) => {
+            dates = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            saveToLocalStorage();
+            renderDates();
+            updateDateSelectorList();
+            updateSyncStatus('synced');
+        }, (error) => {
+            console.error("Dates listener error:", error);
+            updateSyncStatus('offline');
+        });
 
-    // Listen for plans collection
-    db.collection('plans').orderBy('date', 'asc').onSnapshot((snapshot) => {
-        plans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        saveToLocalStorage();
-        renderPlans();
-        updateSyncStatus('synced');
-    }, (error) => {
-        console.error("Plans listener error:", error);
-        updateSyncStatus('offline');
-    });
+    unsubscribeRecipes = getCollectionRef('recipes')
+        .orderBy('createdAt', 'desc')
+        .onSnapshot((snapshot) => {
+            recipes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            saveToLocalStorage();
+            renderRecipes();
+            updateSyncStatus('synced');
+        }, (error) => {
+            console.error("Recipes listener error:", error);
+            updateSyncStatus('offline');
+        });
+
+    unsubscribePlans = getCollectionRef('plans')
+        .orderBy('date', 'asc')
+        .onSnapshot((snapshot) => {
+            plans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            saveToLocalStorage();
+            renderPlans();
+            updateSyncStatus('synced');
+        }, (error) => {
+            console.error("Plans listener error:", error);
+            updateSyncStatus('offline');
+        });
 }
 
 // ==========================================
 // LOCAL STORAGE FALLBACK
 // ==========================================
 function loadFromLocalStorage() {
-    dates = JSON.parse(localStorage.getItem('dates') || '[]');
-    recipes = JSON.parse(localStorage.getItem('recipes') || '[]');
-    plans = JSON.parse(localStorage.getItem('plans') || '[]');
+    const prefix = currentSpaceId ? `space_${currentSpaceId}_` : '';
+    dates = JSON.parse(localStorage.getItem(prefix + 'dates') || '[]');
+    recipes = JSON.parse(localStorage.getItem(prefix + 'recipes') || '[]');
+    plans = JSON.parse(localStorage.getItem(prefix + 'plans') || '[]');
 }
 
 function saveToLocalStorage() {
-    localStorage.setItem('dates', JSON.stringify(dates));
-    localStorage.setItem('recipes', JSON.stringify(recipes));
-    localStorage.setItem('plans', JSON.stringify(plans));
+    const prefix = currentSpaceId ? `space_${currentSpaceId}_` : '';
+    localStorage.setItem(prefix + 'dates', JSON.stringify(dates));
+    localStorage.setItem(prefix + 'recipes', JSON.stringify(recipes));
+    localStorage.setItem(prefix + 'plans', JSON.stringify(plans));
 }
 
 // ==========================================
@@ -170,6 +502,16 @@ function initEventListeners() {
 
     // Confirm delete
     document.getElementById('confirmDeleteBtn').addEventListener('click', handleConfirmDelete);
+
+    // Auth
+    document.getElementById('googleSignInBtn').addEventListener('click', signInWithGoogle);
+    document.getElementById('signOutBtn').addEventListener('click', signOut);
+    document.getElementById('settingsBtn').addEventListener('click', () => openModal('settingsModal'));
+
+    // Space management
+    document.getElementById('createSpaceBtn').addEventListener('click', handleCreateSpace);
+    document.getElementById('joinSpaceBtn').addEventListener('click', handleJoinSpace);
+    document.getElementById('copyInviteBtn').addEventListener('click', handleCopyInviteCode);
 }
 
 // ==========================================
@@ -350,12 +692,14 @@ async function handleDateSubmit(e) {
     try {
         updateSyncStatus('syncing');
 
-        if (db) {
+        if (db && currentSpaceId) {
+            const ref = getCollectionRef('dates');
             if (id) {
-                await db.collection('dates').doc(id).update(dateData);
+                await ref.doc(id).update(dateData);
             } else {
                 dateData.createdAt = new Date().toISOString();
-                await db.collection('dates').add(dateData);
+                dateData.addedBy = currentUser.uid;
+                await ref.add(dateData);
             }
         } else {
             // Local storage fallback
@@ -399,12 +743,14 @@ async function handleRecipeSubmit(e) {
     try {
         updateSyncStatus('syncing');
 
-        if (db) {
+        if (db && currentSpaceId) {
+            const ref = getCollectionRef('recipes');
             if (id) {
-                await db.collection('recipes').doc(id).update(recipeData);
+                await ref.doc(id).update(recipeData);
             } else {
                 recipeData.createdAt = new Date().toISOString();
-                await db.collection('recipes').add(recipeData);
+                recipeData.addedBy = currentUser.uid;
+                await ref.add(recipeData);
             }
         } else {
             // Local storage fallback
@@ -449,12 +795,14 @@ async function handlePlanSubmit(e) {
     try {
         updateSyncStatus('syncing');
 
-        if (db) {
+        if (db && currentSpaceId) {
+            const ref = getCollectionRef('plans');
             if (id) {
-                await db.collection('plans').doc(id).update(planData);
+                await ref.doc(id).update(planData);
             } else {
                 planData.createdAt = new Date().toISOString();
-                await db.collection('plans').add(planData);
+                planData.addedBy = currentUser.uid;
+                await ref.add(planData);
             }
         } else {
             // Local storage fallback
@@ -498,8 +846,8 @@ async function handleConfirmDelete() {
     try {
         updateSyncStatus('syncing');
 
-        if (db) {
-            await db.collection(type).doc(id).delete();
+        if (db && currentSpaceId) {
+            await getCollectionRef(type).doc(id).delete();
         } else {
             if (type === 'dates') {
                 dates = dates.filter(d => d.id !== id);
