@@ -17,6 +17,9 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
     <!-- Login Screen -->
     <div id="loginScreen" class="login-screen">
         <div class="login-content">
@@ -34,9 +37,21 @@
         </div>
     </div>
 
-    <div id="app" style="display:none;">
-        <!-- Header -->
-        <header class="header">
+    <!-- Menu Drawer -->
+    <div id="drawerBackdrop" class="drawer-backdrop"></div>
+    <div id="pastPlansDrawer" class="past-plans-drawer">
+        <div class="drawer-header">
+            <button class="drawer-back-btn" id="drawerBackBtn" style="display:none;">←</button>
+            <h3 id="drawerTitle">Menu</h3>
+            <button class="close-btn" id="closeDrawerBtn">&times;</button>
+        </div>
+        <div id="drawerContent"></div>
+    </div>
+
+    <!-- Header (outside #app for full-width on desktop) -->
+    <header class="header" id="appHeader" style="display:none;">
+        <div class="header-inner">
+            <button class="hamburger-btn" id="hamburgerBtn">&#9776;</button>
             <button class="header-btn" id="settingsBtn">
                 <img id="userAvatar" class="user-avatar" src="" alt="">
             </button>
@@ -44,9 +59,11 @@
             <button class="sync-status" id="syncStatus" title="Sync status">
                 <span class="sync-icon">&#9679;</span>
             </button>
-        </header>
+        </div>
+    </header>
 
-        <!-- Next Dates Section -->
+    <div id="app" style="display:none;">
+        <!-- Upcoming Plans Section -->
         <section class="next-dates-section" id="nextDatesSection">
             <div class="section-header">
                 <h2>Upcoming Plans</h2>
@@ -60,7 +77,7 @@
         <!-- Navigation Tabs -->
         <nav class="tabs">
             <button class="tab active" data-tab="dates">Date Ideas</button>
-            <button class="tab" data-tab="recipes">Recipes</button>
+            <button class="tab" data-tab="food">Food</button>
         </nav>
 
         <!-- Date Ideas Section -->
@@ -81,12 +98,40 @@
             <button class="fab" id="addDateBtn">+</button>
         </section>
 
-        <!-- Recipes Section -->
-        <section class="content-section" id="recipesSection">
-            <div class="cards-container" id="recipesContainer">
-                <!-- Recipe cards will be rendered here -->
+        <!-- Food Section -->
+        <section class="content-section" id="foodSection">
+            <div class="sub-tabs">
+                <button class="sub-tab active" data-subtab="recipes">Recipes</button>
+                <button class="sub-tab" data-subtab="restaurants">Restaurants</button>
             </div>
-            <button class="fab" id="addRecipeBtn">+</button>
+            <div class="filters" id="foodFilters">
+                <button class="filter-btn active" data-food-filter="all">All</button>
+                <button class="filter-btn" data-food-filter="4stars">4+ Stars</button>
+                <button class="filter-btn cook-time-filter" data-food-filter="short">Short</button>
+                <button class="filter-btn cook-time-filter" data-food-filter="medium">Medium</button>
+                <button class="filter-btn cook-time-filter" data-food-filter="long">Long</button>
+                <button class="filter-btn" data-food-filter="italian">Italian</button>
+                <button class="filter-btn" data-food-filter="mexican">Mexican</button>
+                <button class="filter-btn" data-food-filter="japanese">Japanese</button>
+                <button class="filter-btn" data-food-filter="chinese">Chinese</button>
+                <button class="filter-btn" data-food-filter="indian">Indian</button>
+                <button class="filter-btn" data-food-filter="thai">Thai</button>
+                <button class="filter-btn" data-food-filter="american">American</button>
+                <button class="filter-btn" data-food-filter="mediterranean">Med.</button>
+                <button class="filter-btn" data-food-filter="korean">Korean</button>
+                <button class="filter-btn" data-food-filter="french">French</button>
+            </div>
+            <div class="food-subsection active" id="recipesSubsection">
+                <div class="cards-container" id="recipesContainer">
+                    <!-- Recipe cards will be rendered here -->
+                </div>
+            </div>
+            <div class="food-subsection" id="restaurantsSubsection">
+                <div class="cards-container" id="restaurantsContainer">
+                    <!-- Restaurant cards will be rendered here -->
+                </div>
+            </div>
+            <button class="fab" id="addFoodBtn">+</button>
         </section>
     </div>
 
@@ -127,6 +172,14 @@
                         <label class="tag-option"><input type="checkbox" value="relaxing"> Relaxing</label>
                     </div>
                 </div>
+                <div class="form-group">
+                    <label>Custom Tags</label>
+                    <div class="custom-tags-input">
+                        <div id="dateCustomTagsDisplay" class="custom-tags-display"></div>
+                        <input type="text" id="dateCustomTagInput" placeholder="Type a tag and press Enter..." class="tag-input">
+                    </div>
+                    <input type="hidden" id="dateCustomTags">
+                </div>
                 <div class="form-actions">
                     <button type="button" class="btn-secondary" data-close="dateModal">Cancel</button>
                     <button type="submit" class="btn-primary">Save</button>
@@ -135,7 +188,29 @@
         </div>
     </div>
 
-    <!-- Add Recipe Modal -->
+    <!-- Recipe URL Prompt Modal -->
+    <div class="modal" id="recipeUrlModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add Recipe</h3>
+                <button class="close-btn" data-close="recipeUrlModal">&times;</button>
+            </div>
+            <p class="url-prompt-text">Got a recipe link? Paste it to auto-fill the details.</p>
+            <div class="form-group">
+                <input type="url" id="recipeUrlInput" placeholder="https://www.example.com/recipe...">
+            </div>
+            <div id="parseLoader" class="parsing-loader" style="display:none;">
+                <div class="spinner"></div>
+                <p>Parsing recipe...</p>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn-secondary" id="skipParseBtn">Skip</button>
+                <button type="button" class="btn-primary" id="parseRecipeBtn">Parse</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Recipe Modal -->
     <div class="modal" id="recipeModal">
         <div class="modal-content modal-large">
             <div class="modal-header">
@@ -144,6 +219,12 @@
             </div>
             <form id="recipeForm">
                 <input type="hidden" id="recipeId">
+                <input type="hidden" id="recipeImageUrl">
+                <input type="hidden" id="recipeTotalTimeMinutes">
+                <!-- Image preview -->
+                <div id="recipeImagePreview" class="image-preview" style="display:none;">
+                    <img id="recipePreviewImg" src="" alt="">
+                </div>
                 <div class="form-group">
                     <label for="recipeName">Recipe Name</label>
                     <input type="text" id="recipeName" required placeholder="e.g., Homemade Pasta">
@@ -157,6 +238,40 @@
                         <label for="recipeServings">Servings</label>
                         <input type="text" id="recipeServings" placeholder="e.g., 2">
                     </div>
+                </div>
+                <div class="form-group">
+                    <label>Cuisine</label>
+                    <div class="tags-selector" id="recipeCuisineTags">
+                        <label class="tag-option"><input type="checkbox" value="italian"> Italian</label>
+                        <label class="tag-option"><input type="checkbox" value="mexican"> Mexican</label>
+                        <label class="tag-option"><input type="checkbox" value="japanese"> Japanese</label>
+                        <label class="tag-option"><input type="checkbox" value="chinese"> Chinese</label>
+                        <label class="tag-option"><input type="checkbox" value="indian"> Indian</label>
+                        <label class="tag-option"><input type="checkbox" value="thai"> Thai</label>
+                        <label class="tag-option"><input type="checkbox" value="american"> American</label>
+                        <label class="tag-option"><input type="checkbox" value="mediterranean"> Med.</label>
+                        <label class="tag-option"><input type="checkbox" value="korean"> Korean</label>
+                        <label class="tag-option"><input type="checkbox" value="french"> French</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Rating</label>
+                    <div class="star-rating interactive" id="recipeStarRating" data-target="recipeRating">
+                        <span class="star" data-value="1">&#9733;</span>
+                        <span class="star" data-value="2">&#9733;</span>
+                        <span class="star" data-value="3">&#9733;</span>
+                        <span class="star" data-value="4">&#9733;</span>
+                        <span class="star" data-value="5">&#9733;</span>
+                    </div>
+                    <input type="hidden" id="recipeRating" value="">
+                </div>
+                <div class="form-group">
+                    <label>Custom Tags</label>
+                    <div class="custom-tags-input">
+                        <div id="recipeCustomTagsDisplay" class="custom-tags-display"></div>
+                        <input type="text" id="recipeCustomTagInput" placeholder="Type a tag and press Enter..." class="tag-input">
+                    </div>
+                    <input type="hidden" id="recipeCustomTags">
                 </div>
                 <div class="form-group">
                     <label for="recipeIngredients">Ingredients (one per line)</label>
@@ -178,9 +293,80 @@
         </div>
     </div>
 
+    <!-- Add/Edit Restaurant Modal -->
+    <div class="modal" id="restaurantModal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3 id="restaurantModalTitle">Add Restaurant</h3>
+                <button class="close-btn" data-close="restaurantModal">&times;</button>
+            </div>
+            <form id="restaurantForm">
+                <input type="hidden" id="restaurantId">
+                <div class="form-group">
+                    <label for="restaurantName">Name</label>
+                    <input type="text" id="restaurantName" required placeholder="e.g., Olive Garden">
+                </div>
+                <div class="form-group">
+                    <label>Cuisine</label>
+                    <div class="tags-selector" id="restaurantCuisineTags">
+                        <label class="tag-option"><input type="checkbox" value="italian"> Italian</label>
+                        <label class="tag-option"><input type="checkbox" value="mexican"> Mexican</label>
+                        <label class="tag-option"><input type="checkbox" value="japanese"> Japanese</label>
+                        <label class="tag-option"><input type="checkbox" value="chinese"> Chinese</label>
+                        <label class="tag-option"><input type="checkbox" value="indian"> Indian</label>
+                        <label class="tag-option"><input type="checkbox" value="thai"> Thai</label>
+                        <label class="tag-option"><input type="checkbox" value="american"> American</label>
+                        <label class="tag-option"><input type="checkbox" value="mediterranean"> Med.</label>
+                        <label class="tag-option"><input type="checkbox" value="korean"> Korean</label>
+                        <label class="tag-option"><input type="checkbox" value="french"> French</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="restaurantLocation">Location</label>
+                    <input type="text" id="restaurantLocation" placeholder="e.g., Downtown">
+                </div>
+                <div class="form-group">
+                    <label for="restaurantAddress">Address / Maps Link</label>
+                    <input type="text" id="restaurantAddress" placeholder="Paste Google Maps link or address">
+                </div>
+                <div class="form-group">
+                    <label for="restaurantImageUrl">Image URL (optional)</label>
+                    <input type="url" id="restaurantImageUrl" placeholder="https://...">
+                </div>
+                <div class="form-group">
+                    <label>Rating</label>
+                    <div class="star-rating interactive" id="restaurantStarRating" data-target="restaurantRating">
+                        <span class="star" data-value="1">&#9733;</span>
+                        <span class="star" data-value="2">&#9733;</span>
+                        <span class="star" data-value="3">&#9733;</span>
+                        <span class="star" data-value="4">&#9733;</span>
+                        <span class="star" data-value="5">&#9733;</span>
+                    </div>
+                    <input type="hidden" id="restaurantRating" value="">
+                </div>
+                <div class="form-group">
+                    <label>Custom Tags</label>
+                    <div class="custom-tags-input">
+                        <div id="restaurantCustomTagsDisplay" class="custom-tags-display"></div>
+                        <input type="text" id="restaurantCustomTagInput" placeholder="Type a tag and press Enter..." class="tag-input">
+                    </div>
+                    <input type="hidden" id="restaurantCustomTags">
+                </div>
+                <div class="form-group">
+                    <label for="restaurantNotes">Notes</label>
+                    <textarea id="restaurantNotes" rows="2" placeholder="Any notes about the restaurant..."></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" data-close="restaurantModal">Cancel</button>
+                    <button type="submit" class="btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Add Plan Modal -->
     <div class="modal" id="planModal">
-        <div class="modal-content">
+        <div class="modal-content modal-large">
             <div class="modal-header">
                 <h3>Plan a Date</h3>
                 <button class="close-btn" data-close="planModal">&times;</button>
@@ -212,6 +398,12 @@
                     </div>
                 </div>
                 <div class="form-group">
+                    <label>Restaurants (optional)</label>
+                    <div class="date-selector" id="restaurantSelectorList">
+                        <!-- Restaurant options will be rendered here -->
+                    </div>
+                </div>
+                <div class="form-group">
                     <label for="planNotes">Notes</label>
                     <textarea id="planNotes" rows="2" placeholder="Any notes for this plan..."></textarea>
                 </div>
@@ -220,6 +412,32 @@
                     <button type="submit" class="btn-primary">Add Plan</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Plan Detail Modal -->
+    <div class="modal" id="planDetailModal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3 id="planDetailTitle">Plan Details</h3>
+                <button class="close-btn" data-close="planDetailModal">&times;</button>
+            </div>
+            <div id="planDetailContent">
+                <!-- Plan details will be rendered here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Item Detail Modal (stacks above plan detail) -->
+    <div class="modal modal-stacked" id="itemDetailModal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3 id="itemDetailTitle">Details</h3>
+                <button class="close-btn" data-close="itemDetailModal">&times;</button>
+            </div>
+            <div id="itemDetailContent">
+                <!-- Item details will be rendered here -->
+            </div>
         </div>
     </div>
 
