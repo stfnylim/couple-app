@@ -55,10 +55,14 @@
             <button class="header-btn" id="settingsBtn">
                 <img id="userAvatar" class="user-avatar" src="" alt="">
             </button>
-            <h1>Us</h1>
+            <h1>
+                Us
+                <img id="headerGif" class="header-gif" src="" alt="" style="display:none;" onclick="playHeaderAudio()">
+            </h1>
             <button class="sync-status" id="syncStatus" title="Sync status">
                 <span class="sync-icon">&#9679;</span>
             </button>
+            <audio id="headerAudio" src="" preload="auto" style="display:none;"></audio>
         </div>
     </header>
 
@@ -498,10 +502,43 @@
         </div>
     </div>
 
+    <!-- Customize Modal -->
+    <div class="modal" id="customizeModal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3>Customize Header</h3>
+                <button class="close-btn" data-close="customizeModal">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Header GIF (appears next to "Us")</label>
+                <input type="file" id="gifUpload" accept="image/gif" class="file-input">
+                <small>Or paste a GIF URL:</small>
+                <input type="url" id="gifUrl" placeholder="https://example.com/image.gif">
+                <div id="gifPreview" style="margin-top:10px;display:none;">
+                    <img id="gifPreviewImg" style="max-width:100px;max-height:100px;border-radius:8px;" src="" alt="GIF preview">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Audio Clip (plays when GIF is clicked)</label>
+                <input type="file" id="audioUpload" accept="audio/*" class="file-input">
+                <small>Or paste an audio URL:</small>
+                <input type="url" id="audioUrl" placeholder="https://example.com/audio.mp3">
+                <div id="audioPreview" style="margin-top:10px;display:none;">
+                    <audio id="audioPreviewPlayer" controls style="width:100%;max-width:300px;"></audio>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn-secondary" data-close="customizeModal">Cancel</button>
+                <button type="button" class="btn-primary" onclick="saveCustomization()">Save</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
 
     <!-- App Script -->
     <script src="app.js"></script>

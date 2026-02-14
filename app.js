@@ -21,6 +21,7 @@ const RECIPE_PARSER_URL = window.location.hostname === 'localhost' || window.loc
 // ==========================================
 let db = null;
 let auth = null;
+let storage = null;
 let currentUser = null;
 let currentSpaceId = null;
 let isOnline = navigator.onLine;
@@ -62,6 +63,7 @@ function initFirebase() {
         firebase.initializeApp(firebaseConfig);
         db = firebase.firestore();
         auth = firebase.auth();
+        storage = firebase.storage();
 
         db.enablePersistence().catch((err) => {
             console.log("Persistence error:", err);
@@ -468,6 +470,9 @@ function setupRealtimeListeners() {
             console.error("Restaurants listener error:", error);
             updateSyncStatus('offline');
         });
+
+    // Load customization (GIF + audio)
+    loadCustomization();
 }
 
 // ==========================================
@@ -772,6 +777,14 @@ function renderDrawerMenu() {
             '<div class="menu-option-content">' +
                 '<div class="menu-option-title">Past Dates</div>' +
                 '<div class="menu-option-desc">View your completed plans</div>' +
+            '</div>' +
+            '<div class="menu-option-arrow">›</div>' +
+        '</div>' +
+        '<div class="menu-option" onclick="openCustomizeModal()">' +
+            '<div class="menu-option-icon">🎨</div>' +
+            '<div class="menu-option-content">' +
+                '<div class="menu-option-title">Customize</div>' +
+                '<div class="menu-option-desc">Add a GIF and sound to header</div>' +
             '</div>' +
             '<div class="menu-option-arrow">›</div>' +
         '</div>' +
@@ -2189,6 +2202,190 @@ function initColumnResize(e) {
     document.addEventListener('mouseup', onMouseUp);
 }
 
+// ==========================================
+// CUSTOMIZATION (GIF + AUDIO)
+// ==========================================
+function openCustomizeModal() {
+    toggleDrawer(); // Close the drawer
+    loadCurrentCustomization();
+    openModal('customizeModal');
+}
+
+async function loadCurrentCustomization() {
+    if (!currentSpaceId) return;
+
+    try {
+        const customDoc = await db.collection('spaces').doc(currentSpaceId).collection('settings').doc('customization').get();
+        if (customDoc.exists) {
+            const data = customDoc.data();
+
+            // Load GIF
+            if (data.gifUrl) {
+                document.getElementById('gifUrl').value = data.gifUrl;
+                showGifPreview(data.gifUrl);
+            }
+
+            // Load audio
+            if (data.audioUrl) {
+                document.getElementById('audioUrl').value = data.audioUrl;
+                showAudioPreview(data.audioUrl);
+            }
+        }
+    } catch (error) {
+        console.error('Error loading customization:', error);
+    }
+}
+
+function showGifPreview(url) {
+    const preview = document.getElementById('gifPreview');
+    const img = document.getElementById('gifPreviewImg');
+    img.src = url;
+    preview.style.display = 'block';
+}
+
+function showAudioPreview(url) {
+    const preview = document.getElementById('audioPreview');
+    const audio = document.getElementById('audioPreviewPlayer');
+    audio.src = url;
+    preview.style.display = 'block';
+}
+
+async function saveCustomization() {
+    if (!currentSpaceId) {
+        showToast('Please create or join a space first', 'error');
+        return;
+    }
+
+    const gifFile = document.getElementById('gifUpload').files[0];
+    const audioFile = document.getElementById('audioUpload').files[0];
+    const gifUrl = document.getElementById('gifUrl').value.trim();
+    const audioUrl = document.getElementById('audioUrl').value.trim();
+
+    let finalGifUrl = gifUrl;
+    let finalAudioUrl = audioUrl;
+
+    try {
+        // Upload GIF if file selected
+        if (gifFile) {
+            showToast('Uploading GIF...', 'info');
+            finalGifUrl = await uploadFile(gifFile, 'gifs');
+        }
+
+        // Upload audio if file selected
+        if (audioFile) {
+            showToast('Uploading audio...', 'info');
+            finalAudioUrl = await uploadFile(audioFile, 'audio');
+        }
+
+        // Save to Firestore
+        await db.collection('spaces').doc(currentSpaceId).collection('settings').doc('customization').set({
+            gifUrl: finalGifUrl || null,
+            audioUrl: finalAudioUrl || null,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Update UI
+        applyCustomization(finalGifUrl, finalAudioUrl);
+
+        closeModal('customizeModal');
+        showToast('Customization saved!', 'success');
+    } catch (error) {
+        console.error('Error saving customization:', error);
+        showToast('Failed to save customization', 'error');
+    }
+}
+
+async function uploadFile(file, folder) {
+    const fileName = Date.now() + '_' + file.name;
+    const storageRef = storage.ref().child(`${folder}/${currentSpaceId}/${fileName}`);
+
+    await storageRef.put(file);
+    const url = await storageRef.getDownloadURL();
+    return url;
+}
+
+function applyCustomization(gifUrl, audioUrl) {
+    const headerGif = document.getElementById('headerGif');
+    const headerAudio = document.getElementById('headerAudio');
+
+    if (gifUrl) {
+        headerGif.src = gifUrl;
+        headerGif.style.display = 'inline-block';
+    } else {
+        headerGif.style.display = 'none';
+    }
+
+    if (audioUrl) {
+        headerAudio.src = audioUrl;
+    }
+}
+
+async function loadCustomization() {
+    if (!currentSpaceId) return;
+
+    try {
+        const customDoc = await db.collection('spaces').doc(currentSpaceId).collection('settings').doc('customization').get();
+        if (customDoc.exists) {
+            const data = customDoc.data();
+            applyCustomization(data.gifUrl, data.audioUrl);
+        }
+    } catch (error) {
+        console.error('Error loading customization:', error);
+    }
+}
+
+function playHeaderAudio() {
+    const audio = document.getElementById('headerAudio');
+    if (audio.src) {
+        audio.currentTime = 0; // Reset to start
+        audio.play().catch(err => console.log('Audio play error:', err));
+    }
+}
+
+// File input preview handlers
+document.addEventListener('DOMContentLoaded', () => {
+    const gifUpload = document.getElementById('gifUpload');
+    const audioUpload = document.getElementById('audioUpload');
+    const gifUrlInput = document.getElementById('gifUrl');
+    const audioUrlInput = document.getElementById('audioUrl');
+
+    if (gifUpload) {
+        gifUpload.addEventListener('change', (e) => {
+            if (e.target.files[0]) {
+                const url = URL.createObjectURL(e.target.files[0]);
+                showGifPreview(url);
+                gifUrlInput.value = ''; // Clear URL input if file selected
+            }
+        });
+    }
+
+    if (audioUpload) {
+        audioUpload.addEventListener('change', (e) => {
+            if (e.target.files[0]) {
+                const url = URL.createObjectURL(e.target.files[0]);
+                showAudioPreview(url);
+                audioUrlInput.value = ''; // Clear URL input if file selected
+            }
+        });
+    }
+
+    if (gifUrlInput) {
+        gifUrlInput.addEventListener('input', (e) => {
+            if (e.target.value) {
+                showGifPreview(e.target.value);
+            }
+        });
+    }
+
+    if (audioUrlInput) {
+        audioUrlInput.addEventListener('input', (e) => {
+            if (e.target.value) {
+                showAudioPreview(e.target.value);
+            }
+        });
+    }
+});
+
 // Make functions globally available
 window.openDateModal = openDateModal;
 window.openRecipeModal = openRecipeModal;
@@ -2205,3 +2402,6 @@ window.openRecipeDetail = openRecipeDetail;
 window.openRestaurantDetail = openRestaurantDetail;
 window.initColumnResize = initColumnResize;
 window.showPastDates = showPastDates;
+window.openCustomizeModal = openCustomizeModal;
+window.saveCustomization = saveCustomization;
+window.playHeaderAudio = playHeaderAudio;
